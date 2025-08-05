@@ -7,8 +7,8 @@ import os
 
 # -----------------------------
 # KONFIGURASI
-TELEGRAM_BOT_TOKEN = "ISI_TOKEN_BOT_KAMU"
-TELEGRAM_CHAT_ID = "ISI_CHAT_ID_PIC"
+TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
+TELEGRAM_CHAT_ID = "766163612"
 CSV_FILE = "keluhan_data.csv"
 # -----------------------------
 
