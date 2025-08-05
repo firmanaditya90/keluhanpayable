@@ -8,7 +8,7 @@ import os
 # -----------------------------
 # KONFIGURASI
 TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
-TELEGRAM_CHAT_ID = "766163612"
+TELEGRAM_CHAT_ID = "354523027"
 CSV_FILE = "keluhan_data.csv"
 # -----------------------------
 
