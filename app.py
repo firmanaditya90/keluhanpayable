@@ -40,17 +40,19 @@ if menu == "Isi Keluhan":
     st.subheader("Form Pengisian Keluhan")
 
     nama = st.text_input("Nama Lengkap")
+    whatsapp = st.text_input("Nomor Whatsapp")
     email = st.text_input("Email")
     no_spm = st.text_input("Nomor SPM")
     no_invoice = st.text_input("Nomor Invoice")
     keluhan = st.text_area("Isi Keluhan")
 
     if st.button("Kirim Keluhan"):
-        if nama and email and no_spm and no_invoice and keluhan:
+        if nama and whatsapp and email and no_spm and no_invoice and keluhan:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             data = {
                 "timestamp": timestamp,
                 "nama": nama,
+                "whatsapp": whatsapp,
                 "email": email,
                 "no_spm": no_spm,
                 "no_invoice": no_invoice,
@@ -60,6 +62,7 @@ if menu == "Isi Keluhan":
             pesan_telegram = (
                 f"<b>Keluhan Baru Diterima</b>\n"
                 f"🧑 Nama: {nama}\n"
+                f"📱 WhatsApp: {whatsapp}\n"
                 f"📧 Email: {email}\n"
                 f"📄 No SPM: {no_spm}\n"
                 f"🧾 No Invoice: {no_invoice}\n"
