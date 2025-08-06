@@ -18,7 +18,9 @@ def kirim_telegram(pesan):
         "text": pesan,
         "parse_mode": "HTML"
     }
-    requests.post(url, data=payload)
+    response = requests.post(url, data=payload)
+    if response.status_code != 200:
+        st.error(f"Gagal kirim ke Telegram: {response.text}")
 
 # Fungsi simpan keluhan
 def simpan_keluhan(data):
