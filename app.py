@@ -1,16 +1,16 @@
-
 import streamlit as st
 import pandas as pd
 import datetime
 import requests
 import os
 
-# Konfigurasi
+# Konfigurasi file dan bot Telegram
 CSV_FILE = "keluhan_data.csv"
+BALASAN_FILE = "balasan_data.csv"
 TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
-TELEGRAM_CHAT_ID = "-4738584397"
+TELEGRAM_CHAT_ID = "-4738584397"  # ID grup atau user
 
-# Fungsi kirim Telegram
+# Fungsi kirim pesan ke Telegram
 def kirim_telegram(pesan):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -18,11 +18,14 @@ def kirim_telegram(pesan):
         "text": pesan,
         "parse_mode": "HTML"
     }
-    response = requests.post(url, data=payload)
-    if response.status_code != 200:
-        st.error(f"Gagal kirim ke Telegram: {response.text}")
+    try:
+        response = requests.post(url, data=payload)
+        if response.status_code != 200:
+            st.warning(f"Gagal kirim ke Telegram: {response.text}")
+    except Exception as e:
+        st.error(f"Error kirim Telegram: {e}")
 
-# Fungsi simpan keluhan
+# Fungsi simpan data keluhan
 def simpan_keluhan(data):
     df_baru = pd.DataFrame([data])
     if os.path.exists(CSV_FILE):
@@ -32,7 +35,7 @@ def simpan_keluhan(data):
         df = df_baru
     df.to_csv(CSV_FILE, index=False)
 
-# Fungsi cek balasan
+# Fungsi cek balasan berdasarkan nomor tiket
 def cek_balasan(no_tiket):
     if os.path.exists(BALASAN_FILE):
         df = pd.read_csv(BALASAN_FILE)
@@ -41,11 +44,13 @@ def cek_balasan(no_tiket):
             return match.iloc[-1]["balasan"]
     return None
 
-# UI
+# UI Streamlit
+st.set_page_config(page_title="Sistem Keluhan Pembayaran", layout="centered")
 st.title("📨 Sistem Keluhan Verifikasi Pembayaran")
 
 menu = st.sidebar.selectbox("Menu", ["Isi Keluhan", "Cek Tiket"])
 
+# Halaman: Isi Keluhan
 if menu == "Isi Keluhan":
     st.subheader("Form Pengisian Keluhan")
 
@@ -74,24 +79,25 @@ if menu == "Isi Keluhan":
 
             pesan_telegram = (
                 f"<b>Keluhan Baru Masuk</b>\n"
+                f"🎟️ Tiket: <b>{no_tiket}</b>\n"
                 f"🧑 Nama: {nama}\n"
                 f"📧 Email: {email}\n"
-                f"📞 WhatsApp: {no_wa}\n"
-                f"📄 No SPM: {no_spm}\n"
-                f"🧾 No Invoice: {no_invoice}\n"
-                f"🗒️ Keluhan:\n{keluhan}\n"
-                f"🎟️ No Tiket: <b>{no_tiket}</b>\n\n"
+                f"📞 WA: {no_wa}\n"
+                f"📄 SPM: {no_spm}\n"
+                f"🧾 Invoice: {no_invoice}\n"
+                f"🗒️ Keluhan: {keluhan}\n\n"
                 f"Harap balas dengan format:\n"
-                f"/reply {no_tiket} <isi_balasan>"
+                f"/reply {no_tiket} [isi_balasan]"
             )
             kirim_telegram(pesan_telegram)
 
-            st.success("Keluhan berhasil dikirim!")
+            st.success("✅ Keluhan berhasil dikirim!")
             st.info(f"Nomor Tiket Anda: {no_tiket}")
-            st.write("Silakan simpan nomor tiket untuk mengecek status balasan.")
+            st.write("Simpan nomor tiket untuk mengecek status balasan.")
         else:
             st.warning("Harap lengkapi semua kolom!")
 
+# Halaman: Cek Tiket
 elif menu == "Cek Tiket":
     st.subheader("🔍 Cek Status Tiket")
     input_tiket = st.text_input("Masukkan Nomor Tiket")
@@ -103,6 +109,6 @@ elif menu == "Cek Tiket":
                 st.markdown("### ✅ Balasan dari Tim:")
                 st.success(balasan)
             else:
-                st.info("Belum ada balasan dari tim. Mohon bersabar.")
+                st.info("❗ Belum ada balasan dari tim. Mohon bersabar.")
         else:
             st.warning("Masukkan nomor tiket terlebih dahulu.")
