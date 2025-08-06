@@ -1,57 +1,80 @@
-import requests
-import time
-import csv
 import os
+import time
+import pandas as pd
+import requests
+import re
 
-BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
-URL = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
+# Konfigurasi
+TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
 BALASAN_FILE = "balasan_data.csv"
-OFFSET_FILE = "last_update_id.txt"
+LAST_UPDATE_FILE = "last_update_id.txt"
+POLL_INTERVAL = 3  # detik
 
-def get_last_update_id():
-    if os.path.exists(OFFSET_FILE):
-        with open(OFFSET_FILE, "r") as f:
-            return int(f.read().strip())
-    return 0
-
-def save_last_update_id(update_id):
-    with open(OFFSET_FILE, "w") as f:
-        f.write(str(update_id))
+def get_updates(offset=None):
+    url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
+    params = {"timeout": 100}
+    if offset:
+        params["offset"] = offset
+    try:
+        res = requests.get(url, params=params)
+        return res.json()
+    except Exception as e:
+        print("❌ Gagal ambil update:", e)
+        return {"ok": False, "result": []}
 
 def simpan_balasan(no_tiket, balasan):
-    file_exists = os.path.exists(BALASAN_FILE)
-    with open(BALASAN_FILE, "a", newline='', encoding="utf-8") as f:
-        writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(["no_tiket", "balasan"])
-        writer.writerow([no_tiket, balasan])
+    try:
+        data_baru = pd.DataFrame([{"no_tiket": no_tiket, "balasan": balasan}])
+        if os.path.exists(BALASAN_FILE):
+            try:
+                df_lama = pd.read_csv(BALASAN_FILE)
+            except Exception:
+                df_lama = pd.DataFrame()
+            df = pd.concat([df_lama, data_baru], ignore_index=True)
+        else:
+            df = data_baru
+        df.to_csv(BALASAN_FILE, index=False)
+        print(f"✅ Balasan untuk {no_tiket} disimpan.")
+    except Exception as e:
+        print("❌ Gagal simpan balasan:", e)
 
-def run_listener():
-    print("🟢 Listener aktif...")
+def muat_last_update_id():
+    if os.path.exists(LAST_UPDATE_FILE):
+        with open(LAST_UPDATE_FILE, "r") as f:
+            return int(f.read().strip())
+    return None
+
+def simpan_last_update_id(update_id):
+    with open(LAST_UPDATE_FILE, "w") as f:
+        f.write(str(update_id))
+
+def proses_pesan(pesan):
+    if "text" in pesan.get("message", {}):
+        text = pesan["message"]["text"]
+        user = pesan["message"]["from"].get("first_name", "Pengguna")
+        print(f"📥 Pesan dari {user}: {text}")
+
+        match = re.match(r'^/reply\s+(TIKET-\d{14})\s+(.+)', text, re.IGNORECASE)
+        if match:
+            no_tiket = match.group(1).strip()
+            balasan = match.group(2).strip()
+            print(f"📌 Balasan terdeteksi: {no_tiket} -> {balasan}")
+            simpan_balasan(no_tiket, balasan)
+        else:
+            print("⚠️ Format /reply salah atau tidak cocok.")
+
+def main():
+    print("📡 Memulai reply listener...")
+    last_update_id = muat_last_update_id()
+
     while True:
-        offset = get_last_update_id()
-        resp = requests.get(URL, params={"offset": offset + 1})
-        data = resp.json()
-
-        if "result" in data:
-            for update in data["result"]:
-                update_id = update["update_id"]
-                message = update.get("message", {})
-                text = message.get("text", "")
-
-                if text.lower().startswith("/reply"):
-                    parts = text.split(maxsplit=2)
-                    if len(parts) == 3:
-                        _, no_tiket, isi_balasan = parts
-                        print(f"🔔 Balasan terdeteksi untuk {no_tiket}")
-                        simpan_balasan(no_tiket, isi_balasan)
-
-                save_last_update_id(update_id)
-
-        time.sleep(2)
+        hasil = get_updates(offset=last_update_id + 1 if last_update_id else None)
+        if hasil.get("ok"):
+            for pesan in hasil["result"]:
+                proses_pesan(pesan)
+                last_update_id = pesan["update_id"]
+                simpan_last_update_id(last_update_id)
+        time.sleep(POLL_INTERVAL)
 
 if __name__ == "__main__":
-    if not os.path.exists(OFFSET_FILE):
-        with open(OFFSET_FILE, "w") as f:
-            f.write("0")
-    run_listener()
+    main()
