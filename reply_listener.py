@@ -1,77 +1,57 @@
 import requests
 import time
+import csv
 import os
-import pandas as pd
 
-# Konfigurasi
-TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
-TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
+URL = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
 BALASAN_FILE = "balasan_data.csv"
-UPDATE_ID_FILE = "last_update_id.txt"
+OFFSET_FILE = "last_update_id.txt"
 
 def get_last_update_id():
-    if os.path.exists(UPDATE_ID_FILE):
-        with open(UPDATE_ID_FILE, "r") as f:
-            return int(f.read())
-    return None
+    if os.path.exists(OFFSET_FILE):
+        with open(OFFSET_FILE, "r") as f:
+            return int(f.read().strip())
+    return 0
 
 def save_last_update_id(update_id):
-    with open(UPDATE_ID_FILE, "w") as f:
+    with open(OFFSET_FILE, "w") as f:
         f.write(str(update_id))
 
 def simpan_balasan(no_tiket, balasan):
-    data = {
-        "no_tiket": no_tiket,
-        "balasan": balasan,
-        "timestamp": pd.Timestamp.now()
-    }
+    file_exists = os.path.exists(BALASAN_FILE)
+    with open(BALASAN_FILE, "a", newline='', encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["no_tiket", "balasan"])
+        writer.writerow([no_tiket, balasan])
 
-    df_baru = pd.DataFrame([data])
-    if os.path.exists(BALASAN_FILE):
-        df_lama = pd.read_csv(BALASAN_FILE)
-        df = pd.concat([df_lama, df_baru], ignore_index=True)
-    else:
-        df = df_baru
-
-    df.to_csv(BALASAN_FILE, index=False)
-    print(f"✅ Balasan untuk {no_tiket} disimpan!")
-
-def proses_pesan(pesan):
-    if "text" in pesan["message"]:
-        teks = pesan["message"]["text"]
-        if teks.startswith("/reply"):
-            bagian = teks.split(" ", 2)
-            if len(bagian) >= 3:
-                no_tiket = bagian[1].strip()
-                balasan = bagian[2].strip()
-                simpan_balasan(no_tiket, balasan)
-                return True
-    return False
-
-def jalankan_listener():
-    print("📡 Mendengarkan balasan dari Telegram...")
-    last_update_id = get_last_update_id()
-
+def run_listener():
+    print("🟢 Listener aktif...")
     while True:
-        try:
-            params = {"timeout": 10, "offset": last_update_id + 1 if last_update_id else None}
-            response = requests.get(f"{TELEGRAM_API_URL}/getUpdates", params=params, timeout=15)
-            result = response.json()
+        offset = get_last_update_id()
+        resp = requests.get(URL, params={"offset": offset + 1})
+        data = resp.json()
 
-            if result["ok"]:
-                for update in result["result"]:
-                    last_update_id = update["update_id"]
-                    save_last_update_id(last_update_id)
+        if "result" in data:
+            for update in data["result"]:
+                update_id = update["update_id"]
+                message = update.get("message", {})
+                text = message.get("text", "")
 
-                    if "message" in update:
-                        berhasil = proses_pesan(update)
-                        if berhasil:
-                            print(f"📨 Balasan diproses dari: {update['message']['from']['first_name']}")
+                if text.lower().startswith("/reply"):
+                    parts = text.split(maxsplit=2)
+                    if len(parts) == 3:
+                        _, no_tiket, isi_balasan = parts
+                        print(f"🔔 Balasan terdeteksi untuk {no_tiket}")
+                        simpan_balasan(no_tiket, isi_balasan)
 
-        except Exception as e:
-            print(f"❌ Error: {e}")
+                save_last_update_id(update_id)
 
-        time.sleep(5)
+        time.sleep(2)
 
 if __name__ == "__main__":
-    jalankan_listener()
+    if not os.path.exists(OFFSET_FILE):
+        with open(OFFSET_FILE, "w") as f:
+            f.write("0")
+    run_listener()
