@@ -9,7 +9,7 @@ import os
 CSV_FILE = "keluhan_data.csv"
 BALASAN_FILE = "balasan_data.csv"
 TELEGRAM_BOT_TOKEN = "8445782873:AAEG901iWnWl8lBXEUTb69bl_qpj76t7OgE"
-TELEGRAM_CHAT_ID = "-4738584397"
+TELEGRAM_CHAT_ID = "-4738584397"  # Ganti dengan chat_id grup kamu
 
 # Fungsi kirim Telegram
 def kirim_telegram(pesan):
@@ -77,26 +77,15 @@ if menu == "Isi Keluhan":
             simpan_keluhan(data)
 
             pesan_telegram = (
-                f"<b>Keluhan Baru Masuk</b>
-"
-                f"🧑 Nama: {nama}
-"
-                f"📧 Email: {email}
-"
-                f"📞 WhatsApp: {no_wa}
-"
-                f"📄 No SPM: {no_spm}
-"
-                f"🧾 No Invoice: {no_invoice}
-"
-                f"🗒️ Keluhan:
-{keluhan}
-"
-                f"🎟️ No Tiket: <b>{no_tiket}</b>
-
-"
-                f"Harap balas dengan format:
-"
+                f"<b>Keluhan Baru Masuk</b>\n"
+                f"🧑 Nama: {nama}\n"
+                f"📧 Email: {email}\n"
+                f"📞 WhatsApp: {no_wa}\n"
+                f"📄 No SPM: {no_spm}\n"
+                f"🧾 No Invoice: {no_invoice}\n"
+                f"🗒️ Keluhan:\n{keluhan}\n"
+                f"🎟️ No Tiket: <b>{no_tiket}</b>\n\n"
+                f"Harap balas dengan format:\n"
                 f"/reply {no_tiket} <isi_balasan>"
             )
             kirim_telegram(pesan_telegram)
