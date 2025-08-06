@@ -8,7 +8,7 @@ import os
 CSV_FILE = "keluhan_data.csv"
 BALASAN_FILE = "balasan_data.csv"
 TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
-TELEGRAM_CHAT_ID = "-4738584397"  # ID grup atau user
+TELEGRAM_CHAT_ID = "-1002346075387"  # ID grup atau user
 
 # Fungsi kirim pesan ke Telegram
 def kirim_telegram(pesan):
