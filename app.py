@@ -3,16 +3,15 @@ import pandas as pd
 import datetime
 import requests
 import os
+from streamlit_autorefresh import st_autorefresh
 
-# ========== KONFIGURASI ==========
+# Konfigurasi
 CSV_FILE = "keluhan_data.csv"
 BALASAN_FILE = "balasan_data.csv"
 TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
-TELEGRAM_CHAT_ID = "-1002346075387"  # Ganti dengan ID grup Telegram kamu
+TELEGRAM_CHAT_ID = "-1001234567890"  # ID grup supergroup
 
-# ========== FUNGSI ==========
-
-# Kirim pesan ke Telegram
+# Fungsi kirim ke Telegram
 def kirim_telegram(pesan):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -24,10 +23,11 @@ def kirim_telegram(pesan):
         response = requests.post(url, data=payload)
         if response.status_code != 200:
             st.warning(f"Gagal kirim ke Telegram. Status: {response.status_code}")
+            st.text(response.text)
     except Exception as e:
-        st.error(f"Error kirim Telegram: {e}")
+        st.error(f"Error Telegram: {e}")
 
-# Simpan data keluhan ke file
+# Fungsi simpan keluhan
 def simpan_keluhan(data):
     df_baru = pd.DataFrame([data])
     if os.path.exists(CSV_FILE):
@@ -37,7 +37,7 @@ def simpan_keluhan(data):
         df = df_baru
     df.to_csv(CSV_FILE, index=False)
 
-# Cek balasan berdasarkan nomor tiket
+# Fungsi cek balasan
 def cek_balasan(no_tiket):
     if os.path.exists(BALASAN_FILE):
         df = pd.read_csv(BALASAN_FILE)
@@ -46,16 +46,14 @@ def cek_balasan(no_tiket):
             return match.iloc[-1]["balasan"]
     return None
 
-# ========== STREAMLIT UI ==========
+# UI
+st.set_page_config("Form Keluhan Pembayaran", layout="centered")
+st.title("📨 Sistem Keluhan Verifikasi Pembayaran")
 
-st.set_page_config(page_title="Sistem Keluhan", page_icon="📨")
-st.title("📨 Sistem Pengaduan Verifikasi Pembayaran")
+menu = st.sidebar.radio("Pilih Menu", ["Isi Keluhan", "Cek Tiket"])
 
-menu = st.sidebar.selectbox("Menu", ["📬 Isi Keluhan", "📥 Cek Balasan"])
-
-# FORM KELUHAN
-if menu == "📬 Isi Keluhan":
-    st.subheader("Form Keluhan")
+if menu == "Isi Keluhan":
+    st.subheader("Form Pengisian Keluhan")
 
     nama = st.text_input("Nama Lengkap")
     email = st.text_input("Email")
@@ -80,37 +78,34 @@ if menu == "📬 Isi Keluhan":
             }
             simpan_keluhan(data)
 
-            pesan_telegram = (
-                f"<b>📨 Keluhan Baru</b>\n"
+            pesan = (
+                f"<b>📩 Keluhan Baru</b>\n"
                 f"👤 Nama: {nama}\n"
                 f"📧 Email: {email}\n"
-                f"📱 WA: {no_wa}\n"
-                f"🧾 Invoice: {no_invoice}\n"
-                f"📄 SPM: {no_spm}\n"
-                f"💬 Keluhan:\n{keluhan}\n"
+                f"📱 WhatsApp: {no_wa}\n"
+                f"📄 No SPM: {no_spm}\n"
+                f"🧾 No Invoice: {no_invoice}\n"
+                f"📝 Keluhan: {keluhan}\n"
                 f"🎟️ No Tiket: <b>{no_tiket}</b>\n\n"
-                f"➡️ Balas dengan format:\n"
-                f"/reply {no_tiket} <isi_balasan>"
+                f"Balas dengan format:\n<code>/reply {no_tiket} isi_balasan</code>"
             )
+            kirim_telegram(pesan)
 
-            kirim_telegram(pesan_telegram)
-            st.success("✅ Keluhan berhasil dikirim!")
-            st.info(f"🎟️ Nomor Tiket Anda: `{no_tiket}`")
+            st.success("✅ Keluhan berhasil dikirim.")
+            st.info(f"🎟️ Nomor Tiket Anda: {no_tiket}")
         else:
-            st.warning("⚠️ Lengkapi semua kolom!")
+            st.warning("❗ Harap lengkapi semua kolom!")
 
-# CEK BALASAN
-elif menu == "📥 Cek Balasan":
+elif menu == "Cek Tiket":
     st.subheader("🔍 Cek Status Tiket")
-    input_tiket = st.text_input("Masukkan Nomor Tiket Anda")
+    input_tiket = st.text_input("Masukkan Nomor Tiket")
 
-    if st.button("Cek"):
-        if input_tiket:
-            balasan = cek_balasan(input_tiket)
-            if balasan:
-                st.success("💬 Balasan dari Tim:")
-                st.write(balasan)
-            else:
-                st.info("⏳ Belum ada balasan. Mohon tunggu.")
+    # Auto refresh tiap 10 detik
+    st_autorefresh(interval=10000, limit=100, key="refreshbalasan")
+
+    if input_tiket:
+        balasan = cek_balasan(input_tiket)
+        if balasan:
+            st.success(f"💬 Balasan: {balasan}")
         else:
-            st.warning("⚠️ Masukkan nomor tiket.")
+            st.info("⏳ Belum ada balasan. Mohon bersabar.")
