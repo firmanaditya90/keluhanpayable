@@ -1,0 +1,3 @@
+timestamp,no_tiket,nama,email,whatsapp,no_spm,no_invoice,keluhan
+2025-08-05 14:23:01,TIKET-20250805001,Budi Santoso,budi@example.com,08123456789,SPM-00123,INV-456789,Sudah transfer tapi belum diverifikasi.
+2025-08-05 15:01:22,TIKET-20250805002,Siti Aminah,siti@example.com,08198765432,SPM-00124,INV-456790,"Pembayaran ditolak, mohon penjelasan."

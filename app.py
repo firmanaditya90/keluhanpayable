@@ -2,89 +2,81 @@
 import streamlit as st
 import pandas as pd
 import datetime
-import requests
 import os
 
-# Konfigurasi
-CSV_FILE = "keluhan_data.csv"
-TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
-TELEGRAM_CHAT_ID = "-4738584397"
+CSV_KELUHAN = "keluhan_data.csv"
+CSV_BALASAN = "balasan_data.csv"
 
-# Fungsi kirim Telegram
-def kirim_telegram(pesan):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": pesan,
-        "parse_mode": "HTML"
-    }
-    requests.post(url, data=payload)
-
-# Fungsi simpan keluhan
 def simpan_keluhan(data):
     df_baru = pd.DataFrame([data])
-    if os.path.exists(CSV_FILE):
-        df_lama = pd.read_csv(CSV_FILE)
+    if os.path.exists(CSV_KELUHAN):
+        df_lama = pd.read_csv(CSV_KELUHAN)
         df = pd.concat([df_lama, df_baru], ignore_index=True)
     else:
         df = df_baru
-    df.to_csv(CSV_FILE, index=False)
+    df.to_csv(CSV_KELUHAN, index=False)
 
-# Judul app
+def buat_no_tiket():
+    now = datetime.datetime.now()
+    return f"TIKET-{now.strftime('%Y%m%d%H%M%S')}"
+
 st.title("📨 Form Keluhan Verifikasi Pembayaran")
 
-# Sidebar: pilih halaman
-menu = st.sidebar.selectbox("Menu", ["Isi Keluhan", "Lihat Riwayat (Admin)"])
+menu = st.sidebar.selectbox("Menu", ["Isi Keluhan", "Cek Tiket"])
 
 if menu == "Isi Keluhan":
     st.subheader("Form Pengisian Keluhan")
 
     nama = st.text_input("Nama Lengkap")
-    whatsapp = st.text_input("Nomor Whatsapp")
     email = st.text_input("Email")
+    whatsapp = st.text_input("Nomor WhatsApp")
     no_spm = st.text_input("Nomor SPM")
     no_invoice = st.text_input("Nomor Invoice")
     keluhan = st.text_area("Isi Keluhan")
 
     if st.button("Kirim Keluhan"):
-        if nama and whatsapp and email and no_spm and no_invoice and keluhan:
+        if nama and email and no_spm and no_invoice and keluhan:
+            no_tiket = buat_no_tiket()
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             data = {
                 "timestamp": timestamp,
+                "no_tiket": no_tiket,
                 "nama": nama,
-                "whatsapp": whatsapp,
                 "email": email,
+                "whatsapp": whatsapp,
                 "no_spm": no_spm,
                 "no_invoice": no_invoice,
                 "keluhan": keluhan
             }
             simpan_keluhan(data)
-            pesan_telegram = (
-                f"<b>Keluhan Baru Diterima</b>\n"
-                f"🧑 Nama: {nama}\n"
-                f"📱 WhatsApp: {whatsapp}\n"
-                f"📧 Email: {email}\n"
-                f"📄 No SPM: {no_spm}\n"
-                f"🧾 No Invoice: {no_invoice}\n"
-                f"📝 Keluhan: {keluhan}\n"
-                f"🕒 Waktu: {timestamp}"
-            )
-            kirim_telegram(pesan_telegram)
-            st.success("✅ Keluhan berhasil dikirim!")
+            st.success(f"Keluhan berhasil dikirim ✅\nNo Tiket Anda: {no_tiket}")
+            st.info("Mohon bersabar, keluhan Anda akan segera diproses oleh tim kami.")
         else:
-            st.warning("Mohon lengkapi semua data.")
+            st.warning("Harap lengkapi semua isian.")
 
-elif menu == "Lihat Riwayat (Admin)":
-    st.subheader("🔐 Login Admin")
+elif menu == "Cek Tiket":
+    st.subheader("🔍 Cek Status Tiket")
 
-    password = st.text_input("Masukkan Password", type="password")
+    input_tiket = st.text_input("Masukkan No Tiket")
+    if st.button("Cek Status"):
+        if os.path.exists(CSV_KELUHAN):
+            df_keluhan = pd.read_csv(CSV_KELUHAN)
+            keluhan = df_keluhan[df_keluhan["no_tiket"] == input_tiket]
+            if keluhan.empty:
+                st.error("No Tiket tidak ditemukan.")
+            else:
+                st.write("### Keluhan Anda")
+                st.write(keluhan[["timestamp", "nama", "no_spm", "no_invoice", "keluhan"]].iloc[0])
 
-    if password == "admin123":  # Ganti password sesuai keinginanmu
-        st.success("Akses diterima.")
-        if os.path.exists(CSV_FILE):
-            df = pd.read_csv(CSV_FILE)
-            st.dataframe(df)
+                if os.path.exists(CSV_BALASAN):
+                    df_balasan = pd.read_csv(CSV_BALASAN)
+                    balasan = df_balasan[df_balasan["no_tiket"] == input_tiket]
+                    if not balasan.empty:
+                        st.success("### Balasan dari Tim:
+" + balasan["balasan"].iloc[0])
+                    else:
+                        st.info("Keluhan Anda sedang diproses, mohon menunggu 🙏")
+                else:
+                    st.info("Belum ada balasan saat ini.")
         else:
-            st.info("Belum ada data keluhan.")
-    elif password:
-        st.error("Password salah.")
+            st.error("Belum ada data keluhan.")
