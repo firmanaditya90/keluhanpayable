@@ -3,7 +3,6 @@ import pandas as pd
 import datetime
 import requests
 import os
-from streamlit_autorefresh import st_autorefresh
 
 # Konfigurasi
 CSV_FILE = "keluhan_data.csv"
@@ -99,9 +98,6 @@ if menu == "Isi Keluhan":
 elif menu == "Cek Tiket":
     st.subheader("🔍 Cek Status Tiket")
     input_tiket = st.text_input("Masukkan Nomor Tiket")
-
-    # Auto refresh tiap 10 detik
-    st_autorefresh(interval=10000, limit=100, key="refreshbalasan")
 
     if input_tiket:
         balasan = cek_balasan(input_tiket)
