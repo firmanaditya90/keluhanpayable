@@ -72,8 +72,7 @@ elif menu == "Cek Tiket":
                     df_balasan = pd.read_csv(CSV_BALASAN)
                     balasan = df_balasan[df_balasan["no_tiket"] == input_tiket]
                     if not balasan.empty:
-                        st.success("### Balasan dari Tim:
-" + balasan["balasan"].iloc[0])
+                        st.success("### Balasan dari Tim:\n" + balasan["balasan"].iloc[0])
                     else:
                         st.info("Keluhan Anda sedang diproses, mohon menunggu 🙏")
                 else:
