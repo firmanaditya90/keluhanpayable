@@ -3,19 +3,16 @@ import pandas as pd
 import datetime
 import requests
 import os
-from streamlit_autorefresh import st_autorefresh  # Untuk auto refresh
 
-# =========================
-# KONFIGURASI
-# =========================
+# ========== KONFIGURASI ==========
 CSV_FILE = "keluhan_data.csv"
 BALASAN_FILE = "balasan_data.csv"
-TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"  # Ganti dengan token bot kamu
+TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
 TELEGRAM_CHAT_ID = "-1002346075387"  # Ganti dengan ID grup Telegram kamu
 
-# =========================
-# FUNGSI KIRIM TELEGRAM
-# =========================
+# ========== FUNGSI ==========
+
+# Kirim pesan ke Telegram
 def kirim_telegram(pesan):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -26,13 +23,11 @@ def kirim_telegram(pesan):
     try:
         response = requests.post(url, data=payload)
         if response.status_code != 200:
-            st.warning("⚠️ Gagal kirim ke Telegram.")
+            st.warning(f"Gagal kirim ke Telegram. Status: {response.status_code}")
     except Exception as e:
-        st.error(f"❌ Error Telegram: {e}")
+        st.error(f"Error kirim Telegram: {e}")
 
-# =========================
-# FUNGSI SIMPAN KELUHAN
-# =========================
+# Simpan data keluhan ke file
 def simpan_keluhan(data):
     df_baru = pd.DataFrame([data])
     if os.path.exists(CSV_FILE):
@@ -42,9 +37,7 @@ def simpan_keluhan(data):
         df = df_baru
     df.to_csv(CSV_FILE, index=False)
 
-# =========================
-# FUNGSI CEK BALASAN
-# =========================
+# Cek balasan berdasarkan nomor tiket
 def cek_balasan(no_tiket):
     if os.path.exists(BALASAN_FILE):
         df = pd.read_csv(BALASAN_FILE)
@@ -53,22 +46,16 @@ def cek_balasan(no_tiket):
             return match.iloc[-1]["balasan"]
     return None
 
-# =========================
-# UI STREAMLIT
-# =========================
-st.set_page_config(page_title="Sistem Keluhan", layout="centered")
-st.title("📨 Sistem Keluhan Verifikasi Pembayaran")
+# ========== STREAMLIT UI ==========
 
-# Auto-refresh setiap 5 detik saat di menu "Cek Tiket"
-menu = st.sidebar.selectbox("📌 Menu", ["Isi Keluhan", "Cek Tiket"])
-if menu == "Cek Tiket":
-    st_autorefresh(interval=5000, limit=None, key="refresh")
+st.set_page_config(page_title="Sistem Keluhan", page_icon="📨")
+st.title("📨 Sistem Pengaduan Verifikasi Pembayaran")
 
-# =========================
-# FORM ISI KELUHAN
-# =========================
-if menu == "Isi Keluhan":
-    st.subheader("📝 Form Pengisian Keluhan")
+menu = st.sidebar.selectbox("Menu", ["📬 Isi Keluhan", "📥 Cek Balasan"])
+
+# FORM KELUHAN
+if menu == "📬 Isi Keluhan":
+    st.subheader("Form Keluhan")
 
     nama = st.text_input("Nama Lengkap")
     email = st.text_input("Email")
@@ -94,39 +81,36 @@ if menu == "Isi Keluhan":
             simpan_keluhan(data)
 
             pesan_telegram = (
-                f"<b>Keluhan Baru Masuk</b>\n"
-                f"🧑 Nama: {nama}\n"
+                f"<b>📨 Keluhan Baru</b>\n"
+                f"👤 Nama: {nama}\n"
                 f"📧 Email: {email}\n"
-                f"📞 WhatsApp: {no_wa}\n"
-                f"📄 No SPM: {no_spm}\n"
-                f"🧾 No Invoice: {no_invoice}\n"
-                f"🗒️ Keluhan:\n{keluhan}\n"
+                f"📱 WA: {no_wa}\n"
+                f"🧾 Invoice: {no_invoice}\n"
+                f"📄 SPM: {no_spm}\n"
+                f"💬 Keluhan:\n{keluhan}\n"
                 f"🎟️ No Tiket: <b>{no_tiket}</b>\n\n"
-                f"Harap balas dengan format:\n"
+                f"➡️ Balas dengan format:\n"
                 f"/reply {no_tiket} <isi_balasan>"
             )
+
             kirim_telegram(pesan_telegram)
-
             st.success("✅ Keluhan berhasil dikirim!")
-            st.info(f"Nomor Tiket Anda: {no_tiket}")
-            st.write("Simpan nomor tiket untuk mengecek balasan dari tim.")
+            st.info(f"🎟️ Nomor Tiket Anda: `{no_tiket}`")
         else:
-            st.warning("⚠️ Harap lengkapi semua kolom!")
+            st.warning("⚠️ Lengkapi semua kolom!")
 
-# =========================
-# FORM CEK TIKET
-# =========================
-elif menu == "Cek Tiket":
+# CEK BALASAN
+elif menu == "📥 Cek Balasan":
     st.subheader("🔍 Cek Status Tiket")
-    input_tiket = st.text_input("Masukkan Nomor Tiket")
+    input_tiket = st.text_input("Masukkan Nomor Tiket Anda")
 
-    if st.button("Cek Status"):
+    if st.button("Cek"):
         if input_tiket:
             balasan = cek_balasan(input_tiket)
             if balasan:
-                st.markdown("### ✅ Balasan dari Tim:")
-                st.success(balasan)
+                st.success("💬 Balasan dari Tim:")
+                st.write(balasan)
             else:
-                st.info("❗ Belum ada balasan dari tim. Mohon bersabar.")
+                st.info("⏳ Belum ada balasan. Mohon tunggu.")
         else:
-            st.warning("Masukkan nomor tiket terlebih dahulu.")
+            st.warning("⚠️ Masukkan nomor tiket.")
