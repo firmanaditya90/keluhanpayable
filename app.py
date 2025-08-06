@@ -7,8 +7,7 @@ import os
 
 # Konfigurasi
 CSV_FILE = "keluhan_data.csv"
-BALASAN_FILE = "balasan_data.csv"
-TELEGRAM_BOT_TOKEN = "8445782873:AAEG901iWnWl8lBXEUTb69bl_qpj76t7OgE"
+TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
 TELEGRAM_CHAT_ID = "-4738584397"
 
 # Fungsi kirim Telegram
@@ -19,12 +18,7 @@ def kirim_telegram(pesan):
         "text": pesan,
         "parse_mode": "HTML"
     }
-    try:
-        response = requests.post(url, data=payload)
-        if response.status_code != 200:
-            st.warning("Gagal mengirim notifikasi Telegram.")
-    except Exception as e:
-        st.error(f"Error Telegram: {e}")
+    requests.post(url, data=payload)
 
 # Fungsi simpan keluhan
 def simpan_keluhan(data):
