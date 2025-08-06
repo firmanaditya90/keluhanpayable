@@ -8,7 +8,7 @@ import os
 # Konfigurasi
 CSV_FILE = "keluhan_data.csv"
 BALASAN_FILE = "balasan_data.csv"
-TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
+TELEGRAM_BOT_TOKEN = "8445782873:AAEG901iWnWl8lBXEUTb69bl_qpj76t7OgE"
 TELEGRAM_CHAT_ID = "-4738584397"
 
 # Fungsi kirim Telegram
