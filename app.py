@@ -116,7 +116,7 @@ with st.form("form_keluhan"):
                 f"🗂️ SPM: {no_spm}\n"
                 f"📄 Invoice: {no_invoice}\n"
                 f"📝 Keluhan:\n{keluhan}\n\n"
-                f"Balas dengan:\n/reply {no_tiket} <isi>"
+                f"Balas dengan format:\n/reply {no_tiket} isi_balasan</code>"
             )
             kirim_telegram(pesan)
             st.success(f"✅ Keluhan berhasil dikirim.\nNomor Tiket: {no_tiket}")
