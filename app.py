@@ -4,13 +4,13 @@ import datetime
 import requests
 import os
 
-# ====================== KONFIGURASI ======================
-CSV_FILE = "keluhan_data.csv"
-BALASAN_FILE = "balasan_data.csv"
+# Konfigurasi
+CSV_KELUHAN = "keluhan_data.csv"
+CSV_BALASAN = "balasan_data.csv"
 TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
-TELEGRAM_CHAT_ID = "-1002346075387"  # Gantilah dengan Chat ID grup kamu
+TELEGRAM_CHAT_ID = "-1002346075387"  # Supergroup ID
 
-# ====================== FUNGSI ===========================
+# Fungsi kirim pesan ke Telegram
 def kirim_telegram(pesan):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -18,95 +18,118 @@ def kirim_telegram(pesan):
         "text": pesan,
         "parse_mode": "HTML"
     }
-    response = requests.post(url, data=payload)
-    if response.status_code != 200:
-        st.error(f"Gagal kirim ke Telegram. Status: {response.status_code}")
-        st.json(response.json())
+    try:
+        r = requests.post(url, data=payload)
+        if r.status_code != 200:
+            st.error(f"Gagal kirim ke Telegram: {r.text}")
+    except Exception as e:
+        st.error(f"Exception saat kirim Telegram: {e}")
 
+# Fungsi simpan keluhan ke CSV
 def simpan_keluhan(data):
     df_baru = pd.DataFrame([data])
-    if os.path.exists(CSV_FILE):
-        df_lama = pd.read_csv(CSV_FILE)
-        df = pd.concat([df_lama, df_baru], ignore_index=True)
+    if os.path.exists(CSV_KELUHAN):
+        df = pd.read_csv(CSV_KELUHAN)
+        df = pd.concat([df, df_baru], ignore_index=True)
     else:
         df = df_baru
-    df.to_csv(CSV_FILE, index=False)
+    df.to_csv(CSV_KELUHAN, index=False)
 
-def cek_balasan(no_tiket):
-    if os.path.exists(BALASAN_FILE):
-        df = pd.read_csv(BALASAN_FILE)
+# Fungsi ambil balasan
+def ambil_balasan(no_tiket):
+    if os.path.exists(CSV_BALASAN):
+        df = pd.read_csv(CSV_BALASAN)
         match = df[df["no_tiket"].str.upper() == no_tiket.upper()]
         if not match.empty:
             return match.iloc[-1]["balasan"]
     return None
 
-# ======================== UI =============================
-st.set_page_config(page_title="📨 Sistem Keluhan SPM", layout="centered")
+# Fungsi kirim tanggapan user
+def kirim_tanggapan(no_tiket, isi_tanggapan):
+    pesan = f"<b>Tanggapan dari Pelapor</b>\n🎟️ Tiket: <b>{no_tiket}</b>\n💬 {isi_tanggapan}"
+    kirim_telegram(pesan)
 
-st.title("📨 Sistem Pengaduan Verifikasi Pembayaran SPM")
+# Fungsi kirim notifikasi selesai
+def kirim_akhiri(no_tiket):
+    pesan = f"✅ Keluhan dengan tiket <b>{no_tiket}</b> telah <b>SELESAI</b> oleh pelapor."
+    kirim_telegram(pesan)
 
-menu = st.sidebar.radio("Pilih Menu", ["📝 Isi Keluhan", "🔍 Cek Tiket"])
+# ---------- UI Streamlit ---------- #
 
-# ---------------- ISI KELUHAN ------------------
-if menu == "📝 Isi Keluhan":
-    st.header("📝 Form Pengaduan")
+st.set_page_config(page_title="Keluhan SPM", layout="centered")
+st.title("📨 Form Keluhan Verifikasi Pembayaran")
 
-    with st.form("form_keluhan"):
-        nama = st.text_input("Nama Lengkap")
-        email = st.text_input("Email Aktif")
-        no_wa = st.text_input("Nomor WhatsApp")
-        no_spm = st.text_input("Nomor SPM")
-        no_invoice = st.text_input("Nomor Invoice")
-        keluhan = st.text_area("Isi Keluhan")
-        submitted = st.form_submit_button("Kirim Keluhan")
+# Inisialisasi session
+if "no_tiket" not in st.session_state:
+    st.session_state["no_tiket"] = None
 
-        if submitted:
-            if all([nama, email, no_wa, no_spm, no_invoice, keluhan]):
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                no_tiket = f"TIKET-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
-                data = {
-                    "timestamp": timestamp,
-                    "no_tiket": no_tiket,
-                    "nama": nama,
-                    "email": email,
-                    "no_wa": no_wa,
-                    "no_spm": no_spm,
-                    "no_invoice": no_invoice,
-                    "keluhan": keluhan
-                }
-                simpan_keluhan(data)
+# STEP 1: Isi Keluhan
+with st.form("form_keluhan"):
+    nama = st.text_input("Nama Lengkap")
+    email = st.text_input("Email")
+    no_wa = st.text_input("Nomor WhatsApp")
+    no_spm = st.text_input("Nomor SPM")
+    no_invoice = st.text_input("Nomor Invoice")
+    keluhan = st.text_area("Isi Keluhan")
 
-                pesan_telegram = (
-                    f"<b>📩 Keluhan Baru</b>\n"
-                    f"👤 Nama: {nama}\n"
-                    f"📧 Email: {email}\n"
-                    f"📱 WhatsApp: {no_wa}\n"
-                    f"📄 No SPM: {no_spm}\n"
-                    f"🧾 No Invoice: {no_invoice}\n"
-                    f"📝 Keluhan: {keluhan}\n"
-                    f"🎟️ No Tiket: <b>{no_tiket}</b>\n\n"
-                    f"Balas dengan format:\n<code>/reply {no_tiket} isi_balasan</code>"
-                )
-                kirim_telegram(pesan_telegram)
+    submit = st.form_submit_button("Kirim Keluhan")
+    if submit:
+        if all([nama, email, no_wa, no_spm, no_invoice, keluhan]):
+            now = datetime.datetime.now()
+            no_tiket = f"TIKET-{now.strftime('%Y%m%d%H%M%S')}"
+            st.session_state["no_tiket"] = no_tiket
+            data = {
+                "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
+                "no_tiket": no_tiket,
+                "nama": nama,
+                "email": email,
+                "no_wa": no_wa,
+                "no_spm": no_spm,
+                "no_invoice": no_invoice,
+                "keluhan": keluhan
+            }
+            simpan_keluhan(data)
 
-                st.success("✅ Keluhan berhasil dikirim!")
-                st.info(f"🎟️ Nomor Tiket Anda: {no_tiket}")
-                st.caption("📌 Silakan simpan nomor tiket untuk cek balasan dari tim.")
-            else:
-                st.warning("⚠️ Semua kolom harus diisi lengkap!")
+            # Kirim ke Telegram
+            pesan_telegram = (
+                f"<b>Keluhan Baru Masuk</b>\n"
+                f"🧑 Nama: {nama}\n"
+                f"📧 Email: {email}\n"
+                f"📞 WA: {no_wa}\n"
+                f"📄 No SPM: {no_spm}\n"
+                f"🧾 Invoice: {no_invoice}\n"
+                f"🗒️ Keluhan: {keluhan}\n"
+                f"🎟️ Tiket: <b>{no_tiket}</b>\n\n"
+                f"Balas dengan:\n/reply {no_tiket} <isi_balasan>"
+            )
+            kirim_telegram(pesan_telegram)
 
-# ---------------- CEK TIKET ------------------
-elif menu == "🔍 Cek Tiket":
-    st.header("🔍 Cek Status Keluhan")
-
-    no_tiket_input = st.text_input("Masukkan Nomor Tiket Anda")
-
-    if st.button("🔄 Refresh Balasan"):
-        if no_tiket_input:
-            balasan = cek_balasan(no_tiket_input)
-            if balasan:
-                st.success(f"📬 Balasan dari Tim:\n\n{balasan}")
-            else:
-                st.info("⏳ Belum ada balasan dari tim. Mohon tunggu ya.")
+            st.success(f"Keluhan berhasil dikirim. Nomor Tiket: {no_tiket}")
         else:
-            st.warning("⚠️ Masukkan nomor tiket terlebih dahulu.")
+            st.warning("⚠️ Semua kolom wajib diisi!")
+
+# STEP 2: Tampilkan balasan jika tiket sudah dibuat
+no_tiket = st.session_state.get("no_tiket")
+if no_tiket:
+    st.subheader(f"🎟️ Nomor Tiket: {no_tiket}")
+    if st.button("🔄 Cek Balasan PIC"):
+        balasan = ambil_balasan(no_tiket)
+        if balasan:
+            st.success(f"✅ Balasan dari Tim:\n\n{balasan}")
+        else:
+            st.info("❌ Belum ada balasan dari tim.")
+
+    # STEP 3: Kirim tanggapan tambahan
+    tanggapan = st.text_area("Tanggapan Anda terhadap Balasan")
+    if st.button("📤 Kirim Tanggapan"):
+        if tanggapan.strip():
+            kirim_tanggapan(no_tiket, tanggapan.strip())
+            st.success("Tanggapan berhasil dikirim ke Telegram.")
+        else:
+            st.warning("Isi tanggapan tidak boleh kosong.")
+
+    # STEP 4: Akhiri
+    if st.button("✅ Akhiri Keluhan"):
+        kirim_akhiri(no_tiket)
+        st.success("Keluhan ditandai selesai.")
+
