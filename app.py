@@ -4,15 +4,21 @@ import datetime
 import requests
 import os
 import html
+import io
 
+# ================= CONFIG =================
 CSV_KELUHAN = "keluhan_data.csv"
-CSV_DISKUSI = "diskusi_data.csv"
+DISKUSI_CSV_URL = "https://raw.githubusercontent.com/firmanaditya90/keluhanpayable/main/diskusi_data.csv"
+BALASAN_CSV_URL = "https://raw.githubusercontent.com/firmanaditya90/keluhanpayable/main/balasan_data.csv"
 TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
 TELEGRAM_CHAT_ID = "-1002346075387"
+# =========================================
 
+# Escape HTML untuk keamanan pesan Telegram
 def escape_html(text):
     return html.escape(str(text))
 
+# Kirim pesan ke Telegram
 def kirim_telegram(pesan):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -27,138 +33,129 @@ def kirim_telegram(pesan):
     except Exception as e:
         st.error(f"❌ Exception saat kirim Telegram: {e}")
 
-def simpan_csv(filepath, new_row):
-    df_new = pd.DataFrame([new_row])
-    if os.path.exists(filepath):
-        df = pd.read_csv(filepath)
+# Simpan keluhan ke CSV lokal
+def simpan_keluhan(data):
+    df_new = pd.DataFrame([data])
+    if os.path.exists(CSV_KELUHAN):
+        df = pd.read_csv(CSV_KELUHAN)
         df = pd.concat([df, df_new], ignore_index=True)
     else:
         df = df_new
-    df.to_csv(filepath, index=False)
+    df.to_csv(CSV_KELUHAN, index=False)
 
+# Ambil CSV dari GitHub
+def fetch_csv_from_github(url):
+    try:
+        res = requests.get(url)
+        if res.status_code == 200:
+            return pd.read_csv(io.StringIO(res.text))
+    except:
+        pass
+    return pd.DataFrame()
+
+# Tampilkan chat / diskusi
 def tampilkan_chat(no_tiket):
-    if os.path.exists(CSV_DISKUSI):
-        df = pd.read_csv(CSV_DISKUSI)
-        df = df[df['no_tiket'] == no_tiket]
-        df = df.sort_values(by='timestamp')
-        st.markdown("### 💬 Diskusi Tiket")
-        for _, row in df.iterrows():
-            pengirim = row.get("pengirim", "")
-            pesan = row.get("isi", "")
-            waktu = row.get("timestamp", "")
-            if pengirim == "User":
-                st.markdown(
-                    f"""
-                    <div style='background-color:#DCF8C6; padding:10px; border-radius:10px; margin:5px 0; text-align:right'>
-                        <b>{pengirim}</b><br>{pesan}<br><small>{waktu}</small>
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.markdown(
-                    f"""
-                    <div style='background-color:#F1F0F0; padding:10px; border-radius:10px; margin:5px 0; text-align:left'>
-                        <b>{pengirim}</b><br>{pesan}<br><small>{waktu}</small>
-                    </div>
-                    """, unsafe_allow_html=True)
+    df = fetch_csv_from_github(DISKUSI_CSV_URL)
+    if df.empty or 'timestamp' not in df.columns:
+        st.warning("⚠️ Tidak bisa menampilkan diskusi. File kosong atau rusak.")
+        return
 
-# UI Start
-st.set_page_config("💬 Keluhan SPM", layout="centered")
-st.title("📨 Form Keluhan & Chat Interaktif")
+    df = df[df['no_tiket'] == no_tiket].sort_values(by="timestamp")
+    for _, row in df.iterrows():
+        pengirim = row.get("pengirim", "")
+        isi = row.get("isi", "")
+        waktu = row.get("timestamp", "")
+        with st.chat_message("assistant" if pengirim != "User" else "user"):
+            st.markdown(f"**_{pengirim}_** • {waktu}")
+            st.write(isi)
 
-# Session
+# ================= STREAMLIT =================
+st.set_page_config(page_title="Keluhan SPM", layout="centered")
+st.title("💬 Form Keluhan & Chat Diskusi")
+
 if "no_tiket" not in st.session_state:
-    st.session_state["no_tiket"] = None
+    st.session_state.no_tiket = None
 if "keluhan_terkirim" not in st.session_state:
-    st.session_state["keluhan_terkirim"] = False
+    st.session_state.keluhan_terkirim = False
+if "tanggapan_terkirim" not in st.session_state:
+    st.session_state.tanggapan_terkirim = False
+if "keluhan_selesai" not in st.session_state:
+    st.session_state.keluhan_selesai = False
 
-# Form Keluhan
-if not st.session_state["keluhan_terkirim"]:
-    with st.form("kirim_keluhan"):
-        nama = st.text_input("Nama Lengkap")
-        email = st.text_input("Email")
-        no_wa = st.text_input("Nomor WhatsApp")
-        no_spm = st.text_input("Nomor SPM")
-        no_invoice = st.text_input("Nomor Invoice")
-        isi_keluhan = st.text_area("Isi Keluhan")
-        submit = st.form_submit_button("📤 Kirim Keluhan")
+# ======== FORM KELUHAN ========
+with st.form("form_keluhan"):
+    st.subheader("📨 Kirim Keluhan Baru")
+    nama = st.text_input("Nama")
+    email = st.text_input("Email")
+    wa = st.text_input("Nomor WhatsApp")
+    no_spm = st.text_input("No. SPM")
+    invoice = st.text_input("No. Invoice")
+    keluhan = st.text_area("Isi Keluhan")
+    submit = st.form_submit_button("📤 Kirim")
 
-        if submit:
-            if all([nama, email, no_wa, no_spm, no_invoice, isi_keluhan]):
-                now = datetime.datetime.now()
-                no_tiket = f"TIKET-{now.strftime('%Y%m%d%H%M%S')}"
-                st.session_state["no_tiket"] = no_tiket
-                st.session_state["keluhan_terkirim"] = True
+    if submit and not st.session_state.keluhan_terkirim:
+        if all([nama, email, wa, no_spm, invoice, keluhan]):
+            now = datetime.datetime.now()
+            no_tiket = f"TIKET-{now.strftime('%Y%m%d%H%M%S')}"
+            st.session_state.no_tiket = no_tiket
+            st.session_state.keluhan_terkirim = True
 
-                # Simpan ke CSV
-                simpan_csv(CSV_KELUHAN, {
-                    "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-                    "no_tiket": no_tiket,
-                    "nama": nama,
-                    "email": email,
-                    "no_wa": no_wa,
-                    "no_spm": no_spm,
-                    "no_invoice": no_invoice,
-                    "keluhan": isi_keluhan
-                })
+            data = {
+                "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
+                "no_tiket": no_tiket,
+                "nama": nama,
+                "email": email,
+                "no_wa": wa,
+                "no_spm": no_spm,
+                "no_invoice": invoice,
+                "keluhan": keluhan
+            }
+            simpan_keluhan(data)
 
-                simpan_csv(CSV_DISKUSI, {
-                    "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-                    "no_tiket": no_tiket,
-                    "pengirim": "User",
-                    "isi": isi_keluhan
-                })
+            pesan = (
+                f"<b>📩 Keluhan Baru</b>\n"
+                f"🧑 {escape_html(nama)}\n📧 {escape_html(email)}\n📞 {escape_html(wa)}\n"
+                f"📄 SPM: {escape_html(no_spm)}\n🧾 Invoice: {escape_html(invoice)}\n"
+                f"📝 {escape_html(keluhan)}\n🎟️ Tiket: <b>{no_tiket}</b>\n\n"
+                f"Balas dengan:\n/reply {no_tiket} isi_balasan"
+            )
+            kirim_telegram(pesan)
+            st.success(f"✅ Keluhan dikirim. Nomor Tiket: {no_tiket}")
+        else:
+            st.warning("⚠️ Semua kolom wajib diisi!")
 
-                # Kirim ke Telegram
-                pesan = (
-                    f"<b>📩 Keluhan Baru Masuk</b>\n"
-                    f"🧑 Nama: {escape_html(nama)}\n"
-                    f"📧 Email: {escape_html(email)}\n"
-                    f"📞 WA: {escape_html(no_wa)}\n"
-                    f"📄 No SPM: {escape_html(no_spm)}\n"
-                    f"🧾 Invoice: {escape_html(no_invoice)}\n"
-                    f"🗒️ Keluhan: {escape_html(isi_keluhan)}\n"
-                    f"🎟️ Tiket: <b>{no_tiket}</b>\n\n"
-                    f"Untuk membalas:\n/reply {no_tiket} balasan Anda"
-                )
-                kirim_telegram(pesan)
-                st.success(f"✅ Keluhan berhasil dikirim. Tiket: {no_tiket}")
-            else:
-                st.warning("⚠️ Semua kolom wajib diisi.")
-else:
-    no_tiket = st.session_state["no_tiket"]
-    st.subheader(f"🎟️ Tiket: `{no_tiket}`")
+# ======== DISKUSI / CHAT ========
+no_tiket = st.session_state.no_tiket
+if no_tiket:
+    st.divider()
+    st.subheader(f"🎟️ Tiket Aktif: `{no_tiket}`")
+
     if st.button("🔄 Refresh Chat"):
         tampilkan_chat(no_tiket)
 
     tampilkan_chat(no_tiket)
 
+    # ======== Kirim Tanggapan User ========
     with st.form("form_tanggapan"):
-        user_reply = st.text_input("Ketik Tanggapan Anda:")
-        send = st.form_submit_button("📨 Kirim")
+        tanggapan = st.text_area("💬 Balasan Anda")
+        send = st.form_submit_button("📩 Kirim Tanggapan")
+        if send and not st.session_state.tanggapan_terkirim:
+            if tanggapan.strip():
+                now = datetime.datetime.now()
+                pesan = (
+                    f"<b>📨 Tanggapan dari Pelapor</b>\n"
+                    f"🎟️ Tiket: <b>{no_tiket}</b>\n"
+                    f"💬 {escape_html(tanggapan.strip())}"
+                )
+                kirim_telegram(pesan)
+                st.session_state.tanggapan_terkirim = True
+                st.success("✅ Tanggapan dikirim.")
+            else:
+                st.warning("❗ Kolom tanggapan kosong.")
 
-        if send and user_reply.strip():
-            now = datetime.datetime.now()
-            simpan_csv(CSV_DISKUSI, {
-                "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-                "no_tiket": no_tiket,
-                "pengirim": "User",
-                "isi": user_reply.strip()
-            })
-            telegram_pesan = (
-                f"<b>📨 Tanggapan User</b>\n"
-                f"🎟️ Tiket: <b>{no_tiket}</b>\n"
-                f"💬 {escape_html(user_reply.strip())}"
-            )
-            kirim_telegram(telegram_pesan)
-            st.success("✅ Tanggapan terkirim!")
-
-    if st.button("✅ Tandai Keluhan Selesai"):
-        now = datetime.datetime.now()
-        simpan_csv(CSV_DISKUSI, {
-            "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-            "no_tiket": no_tiket,
-            "pengirim": "User",
-            "isi": "Keluhan ditandai selesai oleh pelapor."
-        })
-        kirim_telegram(f"✅ Tiket <b>{no_tiket}</b> telah SELESAI oleh pelapor.")
-        st.success("🎉 Keluhan ditandai selesai.")
+    # ======== Akhiri ========
+    if st.button("✅ Tandai Keluhan Selesai") and not st.session_state.keluhan_selesai:
+        pesan = f"✅ Keluhan Tiket <b>{no_tiket}</b> telah SELESAI oleh pelapor."
+        kirim_telegram(pesan)
+        st.session_state.keluhan_selesai = True
+        st.success("✅ Keluhan ditandai selesai.")
