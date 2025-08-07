@@ -4,14 +4,15 @@ import datetime
 import requests
 import os
 
-# === Konfigurasi ===
+# ---------- Konfigurasi ----------
 CSV_KELUHAN = "keluhan_data.csv"
 CSV_BALASAN = "balasan_data.csv"
 CSV_DISKUSI = "diskusi_data.csv"
-TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
-TELEGRAM_CHAT_ID = "-1002346075387"  # Ganti dengan ID grup kamu
 
-# === Fungsi Telegram ===
+TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
+TELEGRAM_CHAT_ID = "-1002346075387"
+
+# ---------- Fungsi Kirim Telegram ----------
 def kirim_telegram(pesan):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -19,63 +20,47 @@ def kirim_telegram(pesan):
         "text": pesan,
         "parse_mode": "HTML"
     }
-    r = requests.post(url, data=payload)
-    if r.status_code != 200:
-        st.error(f"❌ Gagal kirim ke Telegram: {r.text}")
+    try:
+        r = requests.post(url, data=payload)
+        if r.status_code != 200:
+            st.error(f"❌ Gagal kirim ke Telegram: {r.text}")
+    except Exception as e:
+        st.error(f"❌ Exception saat kirim Telegram: {e}")
 
-# === Simpan keluhan ke CSV ===
-def simpan_keluhan(data):
+# ---------- Fungsi Simpan & Ambil Data ----------
+def simpan_csv(data, csv_file):
     df_baru = pd.DataFrame([data])
-    if os.path.exists(CSV_KELUHAN):
-        df = pd.read_csv(CSV_KELUHAN)
+    if os.path.exists(csv_file):
+        df = pd.read_csv(csv_file)
         df = pd.concat([df, df_baru], ignore_index=True)
     else:
         df = df_baru
-    df.to_csv(CSV_KELUHAN, index=False)
+    df.to_csv(csv_file, index=False)
 
-# === Ambil balasan terakhir ===
 def ambil_balasan(no_tiket):
     if os.path.exists(CSV_BALASAN):
         df = pd.read_csv(CSV_BALASAN)
-        df = df[df["no_tiket"].str.upper() == no_tiket.upper()]
-        if not df.empty:
-            return df.iloc[-1]["balasan"]
+        match = df[df["no_tiket"].str.upper() == no_tiket.upper()]
+        if not match.empty:
+            return match.iloc[-1]["balasan"]
     return None
 
-# === Ambil diskusi lengkap ===
 def ambil_diskusi(no_tiket):
     if os.path.exists(CSV_DISKUSI):
         df = pd.read_csv(CSV_DISKUSI)
-        df = df[df["no_tiket"].str.upper() == no_tiket.upper()]
-        if not df.empty:
-            return df.sort_values("timestamp")
+        return df[df["no_tiket"].str.upper() == no_tiket.upper()]
     return pd.DataFrame()
 
-# === Kirim tanggapan dari user ===
-def kirim_tanggapan(no_tiket, isi):
-    pesan = f"<b>Tanggapan dari Pelapor</b>\n🎟️ Tiket: <b>{no_tiket}</b>\n💬 {isi}\n\nBalas dengan:\n/tanggapan {no_tiket} <balasan PIC>"
-    kirim_telegram(pesan)
+# ---------- Streamlit UI ----------
+st.set_page_config(page_title="SPM Helpdesk", layout="centered")
+st.title("📨 Formulir Keluhan Verifikasi Pembayaran")
 
-# === Tandai keluhan selesai ===
-def kirim_akhiri(no_tiket):
-    pesan = f"✅ Keluhan dengan tiket <b>{no_tiket}</b> telah <b>SELESAI</b> oleh pelapor."
-    kirim_telegram(pesan)
+# Inisialisasi session state
+for key in ["no_tiket", "kirim_disabled", "tanggapan_disabled", "akhiri_disabled"]:
+    if key not in st.session_state:
+        st.session_state[key] = False if "disabled" in key else None
 
-# === Konfigurasi Streamlit ===
-st.set_page_config(page_title="Keluhan Verifikasi Pembayaran", layout="centered")
-st.title("📨 Form Keluhan Verifikasi Pembayaran")
-
-# Inisialisasi Session
-if "no_tiket" not in st.session_state:
-    st.session_state["no_tiket"] = None
-if "submitted" not in st.session_state:
-    st.session_state["submitted"] = False
-if "tanggapan_sent" not in st.session_state:
-    st.session_state["tanggapan_sent"] = False
-if "selesai_sent" not in st.session_state:
-    st.session_state["selesai_sent"] = False
-
-# === Form Input ===
+# ---------- STEP 1: Form Keluhan ----------
 with st.form("form_keluhan"):
     nama = st.text_input("Nama Lengkap")
     email = st.text_input("Email")
@@ -84,13 +69,13 @@ with st.form("form_keluhan"):
     no_invoice = st.text_input("Nomor Invoice")
     keluhan = st.text_area("Isi Keluhan")
 
-    submitted = st.form_submit_button("📤 Kirim Keluhan")
-    if submitted and not st.session_state["submitted"]:
+    kirim = st.form_submit_button("📤 Kirim Keluhan", disabled=st.session_state.kirim_disabled)
+    if kirim:
         if all([nama, email, no_wa, no_spm, no_invoice, keluhan]):
             now = datetime.datetime.now()
             no_tiket = f"TIKET-{now.strftime('%Y%m%d%H%M%S')}"
-            st.session_state["no_tiket"] = no_tiket
-            st.session_state["submitted"] = True
+            st.session_state.no_tiket = no_tiket
+            st.session_state.kirim_disabled = True
 
             data = {
                 "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
@@ -102,7 +87,7 @@ with st.form("form_keluhan"):
                 "no_invoice": no_invoice,
                 "keluhan": keluhan
             }
-            simpan_keluhan(data)
+            simpan_csv(data, CSV_KELUHAN)
 
             pesan = (
                 f"<b>Keluhan Baru Masuk</b>\n"
@@ -113,51 +98,50 @@ with st.form("form_keluhan"):
                 f"🧾 Invoice: {no_invoice}\n"
                 f"🗒️ Keluhan: {keluhan}\n"
                 f"🎟️ Tiket: <b>{no_tiket}</b>\n\n"
-                f"Balas dengan format:\n/reply {no_tiket} isi_balasan</code>"
+                f"Balas dengan:\n<code>/reply {no_tiket} isi_balasan</code>"
             )
             kirim_telegram(pesan)
-            st.success(f"✅ Keluhan dikirim. Nomor Tiket: {no_tiket}")
+            st.success(f"✅ Keluhan berhasil dikirim. Nomor Tiket: {no_tiket}")
         else:
             st.warning("⚠️ Semua kolom wajib diisi.")
 
-# === Lihat Balasan dan Diskusi ===
-no_tiket = st.session_state.get("no_tiket")
+# ---------- STEP 2: Cek Balasan ----------
+no_tiket = st.session_state.no_tiket
 if no_tiket:
-    st.divider()
-    st.subheader(f"🎫 Tiket Aktif: {no_tiket}")
+    st.markdown("---")
+    st.subheader(f"🎟️ Tiket Anda: {no_tiket}")
 
-    if st.button("🔄 Cek Balasan dan Diskusi"):
+    if st.button("🔄 Cek Balasan PIC"):
         balasan = ambil_balasan(no_tiket)
         if balasan:
-            st.success(f"📩 Balasan Terakhir:\n\n{balasan}")
+            st.success(f"📩 Balasan:\n\n{balasan}")
         else:
-            st.info("Belum ada balasan dari tim.")
+            st.info("⏳ Belum ada balasan dari PIC.")
 
-        diskusi_df = ambil_diskusi(no_tiket)
-        if not diskusi_df.empty:
-            st.subheader("💬 Riwayat Diskusi")
-            for _, row in diskusi_df.iterrows():
-                waktu = pd.to_datetime(row["timestamp"]).strftime("%d-%m-%Y %H:%M")
-                pengirim = row["pengirim"]
-                isi = row["isi"]
-                st.markdown(f"**{pengirim}** ({waktu}): {isi}")
-        else:
-            st.info("💬 Belum ada diskusi tambahan.")
+    # ---------- STEP 3: Diskusi Lanjutan ----------
+    st.markdown("### 💬 Diskusi")
+    diskusi_df = ambil_diskusi(no_tiket)
+    if not diskusi_df.empty:
+        for _, row in diskusi_df.iterrows():
+            if row["pengirim"] == "user":
+                st.markdown(f"👤 <b>Anda:</b> {row['pesan']}", unsafe_allow_html=True)
+            else:
+                st.markdown(f"🛠️ <b>PIC:</b> {row['pesan']}", unsafe_allow_html=True)
 
-    st.divider()
-
-    # === Tanggapan User ===
-    tanggapan = st.text_area("Tanggapan Anda")
-    if st.button("📨 Kirim Tanggapan", disabled=st.session_state["tanggapan_sent"]):
+    tanggapan = st.text_area("✏️ Kirim Tanggapan")
+    if st.button("📨 Kirim Tanggapan", disabled=st.session_state.tanggapan_disabled):
         if tanggapan.strip():
-            kirim_tanggapan(no_tiket, tanggapan)
-            st.session_state["tanggapan_sent"] = True
-            st.success("Tanggapan dikirim ke Telegram.")
+            st.session_state.tanggapan_disabled = True
+            pesan = f"<b>Tanggapan dari Pelapor</b>\n🎟️ Tiket: <b>{no_tiket}</b>\n💬 {tanggapan}"
+            kirim_telegram(pesan)
+            simpan_csv({"no_tiket": no_tiket, "pengirim": "user", "pesan": tanggapan}, CSV_DISKUSI)
+            st.success("✅ Tanggapan terkirim.")
         else:
             st.warning("⚠️ Tanggapan tidak boleh kosong.")
 
-    # === Tandai Selesai ===
-    if st.button("✅ Tandai Selesai", disabled=st.session_state["selesai_sent"]):
-        kirim_akhiri(no_tiket)
-        st.session_state["selesai_sent"] = True
+    # ---------- STEP 4: Selesaikan Keluhan ----------
+    if st.button("✅ Tandai Keluhan Selesai", disabled=st.session_state.akhiri_disabled):
+        st.session_state.akhiri_disabled = True
+        pesan = f"✅ Keluhan dengan tiket <b>{no_tiket}</b> telah <b>SELESAI</b> oleh pelapor."
+        kirim_telegram(pesan)
         st.success("✅ Keluhan ditandai selesai.")
