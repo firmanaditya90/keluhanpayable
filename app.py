@@ -5,7 +5,7 @@ import requests
 import os
 import html
 
-# Konfigurasi file dan token
+# Konfigurasi
 CSV_KELUHAN = "keluhan_data.csv"
 CSV_DISKUSI = "diskusi_data.csv"
 TELEGRAM_BOT_TOKEN = "8361565236:AAFsh7asYAhLxhS5qDxDvsVJirVZMsU2pXo"
@@ -15,7 +15,7 @@ TELEGRAM_CHAT_ID = "-1002346075387"
 def escape_html(text):
     return html.escape(str(text))
 
-# Fungsi kirim ke Telegram
+# Kirim ke Telegram
 def kirim_telegram(pesan):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -30,7 +30,7 @@ def kirim_telegram(pesan):
     except Exception as e:
         st.error(f"❌ Exception saat kirim Telegram: {e}")
 
-# Simpan ke file CSV
+# Simpan ke CSV
 def simpan_csv(filepath, new_row):
     df_new = pd.DataFrame([new_row])
     if os.path.exists(filepath):
@@ -40,41 +40,47 @@ def simpan_csv(filepath, new_row):
         df = df_new
     df.to_csv(filepath, index=False)
 
-# Tampilkan diskusi
+# Tampilkan diskusi berdasarkan tiket
 def tampilkan_diskusi(no_tiket):
-    if os.path.exists(CSV_DISKUSI):
-        df = pd.read_csv(CSV_DISKUSI)
+    if not os.path.exists(CSV_DISKUSI):
+        st.info("💬 Belum ada diskusi.")
+        return
 
-        if 'timestamp' not in df.columns:
-            st.warning("⚠️ File diskusi_data.csv belum lengkap.")
-            return
+    df = pd.read_csv(CSV_DISKUSI)
 
-        df = df[df['no_tiket'] == no_tiket]
-        df = df.sort_values(by='timestamp')
-        st.markdown("### 💬 Riwayat Diskusi")
-        for _, row in df.iterrows():
-            waktu = row.get("timestamp", "")
-            pengirim = row.get("pengirim", "")
-            isi = row.get("isi", "")
-            st.markdown(f"🕒 _{waktu}_\n**{pengirim}**: {isi}")
+    # Validasi kolom penting
+    required_cols = {"timestamp", "no_tiket", "pengirim", "isi"}
+    if not required_cols.issubset(set(df.columns)):
+        st.warning("⚠️ File diskusi_data.csv belum lengkap.")
+        return
 
-# ================================
-# UI STREAMLIT
-# ================================
+    df = df[df["no_tiket"] == no_tiket]
+    df = df.sort_values(by="timestamp")
 
-st.set_page_config(page_title="💬 Keluhan SPM", layout="centered")
-st.title("📨 Form Keluhan Verifikasi Pembayaran")
+    if df.empty:
+        st.info("💬 Belum ada diskusi untuk tiket ini.")
+        return
 
-if "no_tiket" not in st.session_state:
-    st.session_state["no_tiket"] = None
-if "keluhan_terkirim" not in st.session_state:
-    st.session_state["keluhan_terkirim"] = False
-if "tanggapan_terkirim" not in st.session_state:
-    st.session_state["tanggapan_terkirim"] = False
-if "keluhan_selesai" not in st.session_state:
-    st.session_state["keluhan_selesai"] = False
+    st.markdown("### 🧾 Riwayat Diskusi")
+    for _, row in df.iterrows():
+        waktu = row["timestamp"]
+        pengirim = row["pengirim"]
+        isi = row["isi"]
+        st.markdown(f"🕒 _{waktu}_  \n**{pengirim}**: {isi}")
 
-# Step 1: Kirim keluhan
+# =========================
+# UI Streamlit
+# =========================
+
+st.set_page_config(page_title="📨 Keluhan SPM", layout="centered")
+st.title("📨 Formulir Keluhan Verifikasi Pembayaran")
+
+# Inisialisasi session
+for key in ["no_tiket", "keluhan_terkirim", "tanggapan_terkirim", "keluhan_selesai"]:
+    if key not in st.session_state:
+        st.session_state[key] = False if "terkirim" in key or "selesai" in key else None
+
+# Form keluhan
 with st.form("form_keluhan"):
     nama = st.text_input("Nama Lengkap")
     email = st.text_input("Email")
@@ -91,8 +97,7 @@ with st.form("form_keluhan"):
             st.session_state["no_tiket"] = no_tiket
             st.session_state["keluhan_terkirim"] = True
 
-            # Simpan data ke keluhan_data.csv
-            data = {
+            simpan_csv(CSV_KELUHAN, {
                 "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
                 "no_tiket": no_tiket,
                 "nama": nama,
@@ -101,10 +106,8 @@ with st.form("form_keluhan"):
                 "no_spm": no_spm,
                 "no_invoice": no_invoice,
                 "keluhan": isi_keluhan
-            }
-            simpan_csv(CSV_KELUHAN, data)
+            })
 
-            # Kirim ke Telegram
             pesan = (
                 f"<b>📩 Keluhan Baru Masuk</b>\n"
                 f"🧑 Nama: {escape_html(nama)}\n"
@@ -121,20 +124,20 @@ with st.form("form_keluhan"):
         else:
             st.warning("⚠️ Semua kolom wajib diisi.")
 
-# Step 2: Cek balasan dan diskusi
-no_tiket = st.session_state.get("no_tiket")
+# Diskusi dan Tanggapan
+no_tiket = st.session_state["no_tiket"]
 if no_tiket:
     st.markdown("---")
     st.subheader(f"🎟️ Nomor Tiket: `{no_tiket}`")
 
-    if st.button("🔄 Refresh Balasan & Diskusi"):
-        tampilkan_diskusi(no_tiket)
+    if st.button("🔄 Refresh Diskusi"):
+        st.experimental_rerun()
 
     tampilkan_diskusi(no_tiket)
 
-    # Step 3: Tanggapan user
+    # Tanggapan user
     with st.form("form_tanggapan"):
-        isi_tanggapan = st.text_area("Tanggapan Anda:")
+        isi_tanggapan = st.text_area("💬 Tanggapan Anda:")
         submit_tanggapan = st.form_submit_button("📩 Kirim Tanggapan")
 
         if submit_tanggapan and not st.session_state["tanggapan_terkirim"]:
@@ -157,7 +160,7 @@ if no_tiket:
             else:
                 st.warning("⚠️ Tanggapan tidak boleh kosong.")
 
-    # Step 4: Akhiri keluhan
+    # Tombol selesai
     if st.button("✅ Tandai Keluhan Selesai") and not st.session_state["keluhan_selesai"]:
         now = datetime.datetime.now()
         simpan_csv(CSV_DISKUSI, {
