@@ -50,10 +50,10 @@ def tampilkan_diskusi(no_tiket):
             return
 
         df = df[df['no_tiket'] == no_tiket]
-        df = df.sort_values(by='waktu')
+        df = df.sort_values(by='timestamp')
         st.markdown("### 💬 Riwayat Diskusi")
         for _, row in df.iterrows():
-            waktu = row.get("waktu", "")
+            waktu = row.get("timestamp", "")
             pengirim = row.get("pengirim", "")
             isi = row.get("isi", "")
             st.markdown(f"🕒 _{waktu}_\n**{pengirim}**: {isi}")
